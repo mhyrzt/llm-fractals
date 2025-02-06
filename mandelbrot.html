@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Colorful Interactive Mandelbrot Set</title>
+  <style>
+    body {
+      margin: 0;
+      background: #222;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      border: 1px solid #fff;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  
+  <script>
+    (function() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+
+      // Initial bounds of the complex plane
+      let minReal = -2.5, maxReal = 1;
+      let minImag = -1,   maxImag = 1;
+
+      // Maximum number of iterations for the Mandelbrot algorithm
+      let maxIterations = 300;
+
+      /**
+       * Convert an HSL color value to RGB.
+       * Conversion formula adapted from https://stackoverflow.com/a/9493060.
+       * Assumes h, s, and l are contained in the set [0, 1] and
+       * returns r, g, and b in the set [0, 255].
+       *
+       * @param {number} h - Hue value (0 to 1)
+       * @param {number} s - Saturation (0 to 1)
+       * @param {number} l - Lightness (0 to 1)
+       * @returns {Array} The RGB representation [r, g, b]
+       */
+      function hslToRgb(h, s, l) {
+          let r, g, b;
+          if (s === 0) {
+              r = g = b = l; // achromatic
+          } else {
+              const hue2rgb = (p, q, t) => {
+                  if (t < 0) t += 1;
+                  if (t > 1) t -= 1;
+                  if (t < 1/6) return p + (q - p) * 6 * t;
+                  if (t < 1/2) return q;
+                  if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                  return p;
+              };
+
+              const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+              const p = 2 * l - q;
+              r = hue2rgb(p, q, h + 1/3);
+              g = hue2rgb(p, q, h);
+              b = hue2rgb(p, q, h - 1/3);
+          }
+          return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+      }
+
+      /**
+       * Draw the Mandelbrot set on the canvas.
+       */
+      function drawMandelbrot() {
+        const imageData = ctx.createImageData(width, height);
+        const data = imageData.data;
+        
+        // Loop over each pixel on the canvas
+        for (let px = 0; px < width; px++) {
+          for (let py = 0; py < height; py++) {
+            // Map pixel position to a point in the complex plane
+            const c_re = minReal + (px / width) * (maxReal - minReal);
+            const c_im = minImag + (py / height) * (maxImag - minImag);
+            
+            let Z_re = c_re;
+            let Z_im = c_im;
+            let n = 0;
+            
+            // Iterate the Mandelbrot function
+            for (; n < maxIterations; n++) {
+              const Z_re2 = Z_re * Z_re;
+              const Z_im2 = Z_im * Z_im;
+              
+              // Check for divergence
+              if (Z_re2 + Z_im2 > 4) {
+                break;
+              }
+              
+              // Compute the next iteration: Z = Z^2 + C
+              const new_re = Z_re2 - Z_im2 + c_re;
+              const new_im = 2 * Z_re * Z_im + c_im;
+              Z_re = new_re;
+              Z_im = new_im;
+            }
+            
+            const pixelIndex = 4 * (py * width + px);
+            if (n === maxIterations) {
+              // Points assumed to be inside the Mandelbrot set: black
+              data[pixelIndex]     = 0;
+              data[pixelIndex + 1] = 0;
+              data[pixelIndex + 2] = 0;
+            } else {
+              // Colorful mapping: vary hue based on the number of iterations
+              // Adjust the hue (0 to 1) based on the iteration count
+              const hue = n / maxIterations;
+              // You can tweak the saturation and lightness values for different effects
+              const [r, g, b] = hslToRgb(hue, 1, 0.5);
+              data[pixelIndex]     = r;
+              data[pixelIndex + 1] = g;
+              data[pixelIndex + 2] = b;
+            }
+            data[pixelIndex + 3] = 255; // Fully opaque
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
+
+      /**
+       * Zoom the view to a new region centered on (clickRe, clickIm)
+       * @param {number} clickRe - Real part of the clicked point.
+       * @param {number} clickIm - Imaginary part of the clicked point.
+       * @param {number} zoomFactor - Factor by which to zoom.
+       */
+      function zoom(clickRe, clickIm, zoomFactor) {
+        // Calculate new width and height of the complex plane
+        const currentWidth  = maxReal - minReal;
+        const currentHeight = maxImag - minImag;
+        const newWidth  = currentWidth * zoomFactor;
+        const newHeight = currentHeight * zoomFactor;
+        
+        // Center the new view on the clicked point
+        minReal = clickRe - newWidth / 2;
+        maxReal = clickRe + newWidth / 2;
+        minImag = clickIm - newHeight / 2;
+        maxImag = clickIm + newHeight / 2;
+        
+        drawMandelbrot();
+      }
+
+      // Handle left-click for zooming in
+      canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        
+        // Convert pixel to complex coordinate
+        const clickRe = minReal + (px / width) * (maxReal - minReal);
+        const clickIm = minImag + (py / height) * (maxImag - minImag);
+        
+        // Zoom in by a factor of 0.5 (i.e., new view is half the size of current)
+        zoom(clickRe, clickIm, 0.5);
+      });
+
+      // Handle right-click for zooming out
+      canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault(); // Prevent the context menu from appearing
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        
+        // Convert pixel to complex coordinate
+        const clickRe = minReal + (px / width) * (maxReal - minReal);
+        const clickIm = minImag + (py / height) * (maxImag - minImag);
+        
+        // Zoom out by a factor of 2 (i.e., new view is twice as large)
+        zoom(clickRe, clickIm, 2);
+      });
+
+      // Initial draw
+      drawMandelbrot();
+    })();
+  </script>
+</body>
+</html>

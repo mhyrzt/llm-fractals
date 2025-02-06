@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Koch Snowflake with Inverse Option</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #f0f0f0;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      background: white;
+    }
+    .controls {
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .controls label {
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <div>
+      <label for="depth">Recursion Depth: <span id="depthValue">4</span></label>
+      <input type="range" id="depth" min="0" max="6" value="4">
+    </div>
+    <div>
+      <input type="checkbox" id="inverse">
+      <label for="inverse">Inverse Mode</label>
+    </div>
+  </div>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const depthInput = document.getElementById('depth');
+    const depthValueDisplay = document.getElementById('depthValue');
+    const inverseInput = document.getElementById('inverse');
+
+    // Draw a straight line between two points
+    function drawLine(x1, y1, x2, y2) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // Recursive function to draw a Koch curve.
+    // The 'inverse' parameter determines on which side the triangle is drawn.
+    function kochCurve(x1, y1, x2, y2, depth, inverse) {
+      if (depth === 0) {
+        drawLine(x1, y1, x2, y2);
+        return;
+      }
+
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+
+      // Divide the segment into three parts.
+      const xA = x1 + dx / 3;
+      const yA = y1 + dy / 3;
+      const xB = x1 + (2 * dx) / 3;
+      const yB = y1 + (2 * dy) / 3;
+
+      // Calculate the peak (xC, yC) of the equilateral triangle.
+      // For the standard mode, subtract π/3; for inverse mode, add π/3.
+      const baseAngle = Math.atan2(dy, dx);
+      const triangleAngle = baseAngle + (inverse ? Math.PI / 3 : -Math.PI / 3);
+      const segmentLength = Math.hypot(dx, dy) / 3;
+      const xC = xA + Math.cos(triangleAngle) * segmentLength;
+      const yC = yA + Math.sin(triangleAngle) * segmentLength;
+
+      // Recursively draw the four segments.
+      kochCurve(x1, y1, xA, yA, depth - 1, inverse);
+      kochCurve(xA, yA, xC, yC, depth - 1, inverse);
+      kochCurve(xC, yC, xB, yB, depth - 1, inverse);
+      kochCurve(xB, yB, x2, y2, depth - 1, inverse);
+    }
+
+    // Function to draw the complete Koch snowflake.
+    // It accepts the recursion depth and the inverse mode flag.
+    function drawSnowflake(depth, inverse) {
+      // Define the size of the snowflake.
+      const size = 400;
+      const xCenter = canvas.width / 2;
+      const yCenter = canvas.height / 2;
+      const height = size * Math.sqrt(3) / 2;
+
+      // Calculate vertices of an equilateral triangle.
+      const x1 = xCenter - size / 2;
+      const y1 = yCenter + height / 3;
+      const x2 = xCenter + size / 2;
+      const y2 = y1;
+      const x3 = xCenter;
+      const y3 = yCenter - (2 * height) / 3;
+
+      // Clear the canvas.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 1;
+
+      // Draw each side of the snowflake.
+      kochCurve(x1, y1, x2, y2, depth, inverse);
+      kochCurve(x2, y2, x3, y3, depth, inverse);
+      kochCurve(x3, y3, x1, y1, depth, inverse);
+    }
+
+    // Redraw the snowflake using current control values.
+    function redraw() {
+      const depth = parseInt(depthInput.value, 10);
+      const inverse = inverseInput.checked;
+      depthValueDisplay.textContent = depth;
+      drawSnowflake(depth, inverse);
+    }
+
+    // Initial drawing.
+    redraw();
+
+    // Update the snowflake whenever the slider or checkbox changes.
+    depthInput.addEventListener('input', redraw);
+    inverseInput.addEventListener('change', redraw);
+  </script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Julia Set with Click Zoom</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      border: 2px solid #fff;
+      /* The cursor changes to indicate interactivity */
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="juliaCanvas" width="600" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('juliaCanvas');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Disable the context menu on right-click.
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Initial view window in the complex plane.
+    let minX = -1.5, maxX = 1.5, minY = -1.5, maxY = 1.5;
+
+    // Julia set constant (feel free to experiment with these).
+    const c_re = -0.7;
+    const c_im = 0.27015;
+    const maxIterations = 300;
+
+    /**
+     * Converts HSL values to an RGB object.
+     * Returns an object: { r, g, b }.
+     */
+    function hslToRgb(h, s, l) {
+      h = h % 360;
+      s = Math.max(0, Math.min(1, s));
+      l = Math.max(0, Math.min(1, l));
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+      const m = l - c/2;
+      let r1, g1, b1;
+      
+      if (h < 60) { r1 = c; g1 = x; b1 = 0; }
+      else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
+      else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
+      else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+      else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
+      else { r1 = c; g1 = 0; b1 = x; }
+  
+      return {
+        r: Math.round((r1 + m) * 255),
+        g: Math.round((g1 + m) * 255),
+        b: Math.round((b1 + m) * 255)
+      };
+    }
+
+    /**
+     * Draws the Julia set using the current view window.
+     */
+    function drawJulia() {
+      const imgData = ctx.createImageData(width, height);
+      const data = imgData.data;
+
+      for (let px = 0; px < width; px++) {
+        for (let py = 0; py < height; py++) {
+          // Map the pixel (px,py) to a point (x0, y0) in the complex plane.
+          const x0 = minX + (px / width) * (maxX - minX);
+          const y0 = minY + (py / height) * (maxY - minY);
+          
+          let x = x0;
+          let y = y0;
+          let iteration = 0;
+          
+          // Iterate z = z^2 + c until divergence or max iterations.
+          while (x * x + y * y <= 4 && iteration < maxIterations) {
+            const xtemp = x * x - y * y + c_re;
+            y = 2 * x * y + c_im;
+            x = xtemp;
+            iteration++;
+          }
+  
+          const index = 4 * (py * width + px);
+          let color;
+          if (iteration === maxIterations) {
+            // Likely part of the Julia set.
+            color = { r: 0, g: 0, b: 0 };
+          } else {
+            // Map iteration count to a hue value.
+            const hue = 360 * iteration / maxIterations;
+            color = hslToRgb(hue, 1, 0.5);
+          }
+          data[index] = color.r;
+          data[index + 1] = color.g;
+          data[index + 2] = color.b;
+          data[index + 3] = 255; // Fully opaque.
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // ----------------------------
+    // INTERACTIVE FEATURES
+    // ----------------------------
+
+    // Variables to handle dragging/panning.
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+    let startBounds = { minX, maxX, minY, maxY };
+    // This will hold which mouse button started the interaction:
+    // 0 = left button, 2 = right button.
+    let currentButton = null;
+    const dragThreshold = 5; // Minimum movement (in pixels) to treat as a drag.
+
+    // When the mouse is pressed down...
+    canvas.addEventListener('mousedown', (e) => {
+      currentButton = e.button; // 0 for left-click, 2 for right-click.
+      dragStart.x = e.clientX;
+      dragStart.y = e.clientY;
+      // Save the current view window for panning.
+      startBounds = { minX, maxX, minY, maxY };
+      isDragging = false;
+    });
+
+    // While moving the mouse...
+    canvas.addEventListener('mousemove', (e) => {
+      // Allow panning only with the left mouse button.
+      if (currentButton === 0) {
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        // If movement is significant, mark it as a drag.
+        if (!isDragging && Math.sqrt(dx * dx + dy * dy) > dragThreshold) {
+          isDragging = true;
+        }
+        if (isDragging) {
+          // Convert pixel movement to complex plane movement.
+          const deltaX = (dx / width) * (startBounds.maxX - startBounds.minX);
+          const deltaY = (dy / height) * (startBounds.maxY - startBounds.minY);
+          minX = startBounds.minX - deltaX;
+          maxX = startBounds.maxX - deltaX;
+          minY = startBounds.minY - deltaY;
+          maxY = startBounds.maxY - deltaY;
+          drawJulia();
+        }
+      }
+    });
+
+    // When the mouse button is released...
+    canvas.addEventListener('mouseup', (e) => {
+      // If no dragging occurred, interpret it as a click for zooming.
+      if (!isDragging) {
+        // Get the mouse position relative to the canvas.
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        // Convert pixel coordinates to the complex plane.
+        const xCenter = minX + (mouseX / width) * (maxX - minX);
+        const yCenter = minY + (mouseY / height) * (maxY - minY);
+  
+        // Determine zoom factor based on which button was clicked.
+        // Left-click (button 0) zooms in; right-click (button 2) zooms out.
+        let zoomFactor;
+        if (e.button === 0) {
+          zoomFactor = 0.8; // Zoom in
+        } else if (e.button === 2) {
+          zoomFactor = 1.25; // Zoom out
+        }
+  
+        // Calculate new dimensions of the view window.
+        const newWidth = (maxX - minX) * zoomFactor;
+        const newHeight = (maxY - minY) * zoomFactor;
+  
+        // Adjust boundaries so that the click point becomes (approximately) the new center.
+        minX = xCenter - (mouseX / width) * newWidth;
+        maxX = minX + newWidth;
+        minY = yCenter - (mouseY / height) * newHeight;
+        maxY = minY + newHeight;
+  
+        drawJulia();
+      }
+      // Reset state.
+      isDragging = false;
+      currentButton = null;
+    });
+
+    // Reset dragging state if the mouse leaves the canvas.
+    canvas.addEventListener('mouseleave', () => {
+      isDragging = false;
+      currentButton = null;
+    });
+
+    // Initial drawing of the fractal.
+    drawJulia();
+  </script>
+</body>
+</html>
