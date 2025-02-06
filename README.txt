@@ -40,8 +40,3 @@ Contributions:
 --------------
 Contributions, suggestions, or improvements are welcome.
 Feel free to fork the repository or open an issue if you have ideas for enhancing the project.
-
-License:
---------
-[Include license details here if applicable.]
-
